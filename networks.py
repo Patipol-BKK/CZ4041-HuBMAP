@@ -187,7 +187,7 @@ class CBAM_R2Block(nn.Module):
         
         self.sequential = nn.Sequential(*layers)
         
-        self.conv = nn.Conv2d(in_channels,out_channels,kernel_size=1,stride=1,padding=0)
+        self.conv = nn.Conv2d(in_channels,hidden_channels,kernel_size=1,stride=1,padding=0)
         
         self.cbam = CBAM(out_channels)
         
@@ -195,6 +195,34 @@ class CBAM_R2Block(nn.Module):
         x = self.conv(x)
         r2_out = self.sequential(x) + x
         out = r2_out * self.cbam(r2_out)
+        return out
+
+# Recurrent residual blocks
+class R2Block(nn.Module):
+    def __init__(self, layer_type, in_channels, out_channels, hidden_channels=1, num_layers=1, activation_type='ReLU', negative_slope=0.01, kernel_size=3):
+        super().__init__()
+        layers = []
+        
+        for _ in range(num_layers):  
+            layers.append(RecurrentBlock(
+                layer_type = layer_type,
+                in_channels = hidden_channels,
+                out_channels = hidden_channels,
+                activation_type = activation_type,
+                negative_slope = negative_slope,
+                kernel_size = kernel_size
+            ))
+        
+        self.sequential = nn.Sequential(*layers)
+        
+        self.conv_in = nn.Conv2d(in_channels,hidden_channels,kernel_size=1,stride=1,padding=0)
+        
+        self.conv_out = nn.Conv2d(hidden_channels,out_channels,kernel_size=1,stride=1,padding=0)
+        
+    def forward(self, x):
+        x = self.conv_in(x)
+        r2_out = self.sequential(x) + x
+        out = self.conv_out(r2_out)
         return out
 
 # Plain Autoencoder
@@ -303,7 +331,7 @@ class UNet(nn.Module):
         )
         
         self.decode_1 = Block(
-            layer_type = 'Conv2d',
+            layer_type = 'ConvTrans2d',
             in_channels = 256, 
             out_channels = 64, 
             hidden_channels = 128,
@@ -383,10 +411,7 @@ class UNet(nn.Module):
         out = self.generate(out_9)
         return self.transform_output(out)
 
-# U-Net with Recurrent Residual Blocks and spacial and channel attention (CBAM)
-# Base U-Net Model: https://bmcbiomedeng.biomedcentral.com/articles/10.1186/s42490-021-00050-y
-# Recurrent Residual Blocks: https://arxiv.org/abs/1802.06955
-class CBAM_R2UNet(nn.Module):
+class R2UNet(nn.Module):
     def __init__(self, input_size=(128, 128), output_size=(128, 128)):
         super().__init__()
         
@@ -396,7 +421,7 @@ class CBAM_R2UNet(nn.Module):
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.upscale = nn.Upsample(scale_factor=2, mode='bilinear')
         
-        self.encode_1 = CBAM_R2Block(
+        self.encode_1 = R2Block(
             layer_type = 'Conv2d',
             in_channels = 1, 
             out_channels = 16,
@@ -405,7 +430,7 @@ class CBAM_R2UNet(nn.Module):
             activation_type = 'ReLU'
         )
         
-        self.encode_2 = CBAM_R2Block(
+        self.encode_2 = R2Block(
             layer_type = 'Conv2d',
             in_channels = 16, 
             out_channels = 32,
@@ -414,7 +439,7 @@ class CBAM_R2UNet(nn.Module):
             activation_type = 'ReLU'
         )
         
-        self.encode_3 = CBAM_R2Block(
+        self.encode_3 = R2Block(
             layer_type = 'Conv2d',
             in_channels = 32, 
             out_channels = 64, 
@@ -423,7 +448,7 @@ class CBAM_R2UNet(nn.Module):
             activation_type = 'ReLU'
         )
         
-        self.encode_4 = CBAM_R2Block(
+        self.encode_4 = R2Block(
             layer_type = 'Conv2d',
             in_channels = 64, 
             out_channels = 128, 
@@ -432,7 +457,7 @@ class CBAM_R2UNet(nn.Module):
             activation_type = 'ReLU'
         )
         
-        self.encode_5 = Block(
+        self.encode_5 = R2Block(
             layer_type = 'Conv2d',
             in_channels = 128, 
             out_channels = 128, 
@@ -441,17 +466,8 @@ class CBAM_R2UNet(nn.Module):
             activation_type = 'ReLU'
         )
         
-        self.encode_5 = Block(
+        self.decode_1 = R2Block(
             layer_type = 'Conv2d',
-            in_channels = 128, 
-            out_channels = 128, 
-            hidden_channels = 256 ,
-            num_layers = 2,
-            activation_type = 'ReLU'
-        )
-        
-        self.decode_1 = Block(
-            layer_type = 'ConvTranspose2d',
             in_channels = 256, 
             out_channels = 64, 
             hidden_channels = 128,
@@ -459,8 +475,8 @@ class CBAM_R2UNet(nn.Module):
             activation_type = 'ReLU'
         )
         
-        self.decode_2 = Block(
-            layer_type = 'ConvTranspose2d',
+        self.decode_2 = R2Block(
+            layer_type = 'Conv2d',
             in_channels = 128, 
             out_channels = 32, 
             hidden_channels = 64,
@@ -468,8 +484,8 @@ class CBAM_R2UNet(nn.Module):
             activation_type = 'ReLU'
         )
         
-        self.decode_3 = Block(
-            layer_type = 'ConvTranspose2d',
+        self.decode_3 = R2Block(
+            layer_type = 'Conv2d',
             in_channels = 64, 
             out_channels = 16, 
             hidden_channels = 32,
@@ -477,8 +493,149 @@ class CBAM_R2UNet(nn.Module):
             activation_type = 'ReLU'
         )
         
-        self.decode_4 = Block(
-            layer_type = 'ConvTranspose2d',
+        self.decode_4 = R2Block(
+            layer_type = 'Conv2d',
+            in_channels = 32, 
+            out_channels = 16, 
+            hidden_channels = 16,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.generate = Block(
+            layer_type = 'Conv2d',
+            in_channels = 16, 
+            out_channels = 1,
+            hidden_channels = 1,
+            num_layers = 1,
+            activation_type = 'Sigmoid',
+            kernel_size = 3
+        )
+
+    def forward(self, x):
+        
+        in_1 = self.transform_input(x)
+        out_1 = self.encode_1(in_1)
+        skip_1 = out_1.detach().clone()
+        out_1 = self.pool(out_1)
+        
+        out_2 = self.encode_2(out_1)
+        skip_2 = out_2.detach().clone()
+        out_2 = self.pool(out_2)
+        
+        out_3 = self.encode_3(out_2)
+        skip_3 = out_3.detach().clone()
+        out_3 = self.pool(out_3)
+        
+        out_4 = self.encode_4(out_3)
+        skip_4 = out_4.detach().clone()
+        out_4 = self.pool(out_4)
+        
+        out_5 = self.encode_5(out_4)
+        out_5 = self.upscale(out_5)
+        
+        out_6 = self.decode_1(torch.cat((skip_4, out_5), 1))
+        out_6 = self.upscale(out_6)
+        
+        out_7 = self.decode_2(torch.cat((skip_3, out_6), 1))
+        out_7 = self.upscale(out_7)
+        
+        out_8 = self.decode_3(torch.cat((skip_2, out_7), 1))
+        out_8 = self.upscale(out_8)
+        
+        out_9 = self.decode_4(torch.cat((skip_1, out_8), 1))
+        
+        out = self.generate(out_9)
+
+        return self.transform_output(out)
+
+# U-Net with Recurrent Residual Blocks and spacial and channel attention (CBAM)
+# Base U-Net Model: https://bmcbiomedeng.biomedcentral.com/articles/10.1186/s42490-021-00050-y
+# Recurrent Residual Blocks: https://arxiv.org/abs/1802.06955
+class R2UNet(nn.Module):
+    def __init__(self, input_size=(128, 128), output_size=(128, 128)):
+        super().__init__()
+        
+        self.transform_input = nn.AdaptiveAvgPool2d(input_size)
+        self.transform_output = nn.AdaptiveAvgPool2d(output_size)
+        
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.upscale = nn.Upsample(scale_factor=2, mode='bilinear')
+        
+        self.encode_1 = R2Block(
+            layer_type = 'Conv2d',
+            in_channels = 1, 
+            out_channels = 16,
+            hidden_channels = 16,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.encode_2 = R2Block(
+            layer_type = 'Conv2d',
+            in_channels = 16, 
+            out_channels = 32,
+            hidden_channels = 32,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.encode_3 = R2Block(
+            layer_type = 'Conv2d',
+            in_channels = 32, 
+            out_channels = 64, 
+            hidden_channels = 64,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.encode_4 = R2Block(
+            layer_type = 'Conv2d',
+            in_channels = 64, 
+            out_channels = 128, 
+            hidden_channels = 128,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.encode_5 = Block(
+            layer_type = 'Conv2d',
+            in_channels = 128, 
+            out_channels = 128, 
+            hidden_channels = 256 ,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.decode_1 = R2Block(
+            layer_type = 'Conv2d',
+            in_channels = 256, 
+            out_channels = 64, 
+            hidden_channels = 128,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.decode_2 = R2Block(
+            layer_type = 'Conv2d',
+            in_channels = 128, 
+            out_channels = 32, 
+            hidden_channels = 64,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.decode_3 = R2Block(
+            layer_type = 'Conv2d',
+            in_channels = 64, 
+            out_channels = 16, 
+            hidden_channels = 32,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.decode_4 = R2Block(
+            layer_type = 'Conv2d',
             in_channels = 32, 
             out_channels = 16, 
             hidden_channels = 16,
