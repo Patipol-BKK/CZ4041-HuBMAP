@@ -9,8 +9,12 @@ def read_tiff(image_path):
         image_data = image.read().astype(np.float32)
         
         if image_data.shape[0] == 1:
-            image_data /= 255.0
+            if image_data.any() > 1:
+                image_data /= 255.0
         else:
+            if image_data.any() > 1:
+                image_data /= 255.0
+
             image_data = np.average(
                 image_data, 
                 axis=0, 
@@ -27,11 +31,6 @@ def read_tiff(image_path):
         # equalized_image = equalized_image.reshape(image_data.shape)
             
         return image_data.astype(np.float32)
-
-# loss function with adjusted scaling based on label_mean
-def adjusted_mse(output, target, label_mean):
-    loss = torch.mean(((output - target) * torch.where(target < 0.5, 1/label_mean, 1/(1-label_mean)))**2)
-    return loss
 
 # Calculate average of mask labels, use to weight loss accordingly
 def dataset_label_mean(dataset):

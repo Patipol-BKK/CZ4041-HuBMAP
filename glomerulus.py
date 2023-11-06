@@ -166,13 +166,14 @@ class Patch():
         
         return rotated_image[:, y_tl:y_br, x_tl:x_br]
 
+# Generates random patches centered around random glomerulus + random transformation (x, y, and rotation)
 def generate_glomerulus_patches(patch_size, num_patches, glomeruli, image):
     patches = []
     for _ in tqdm(range(num_patches)):
         glomeruli_num = len(glomeruli)
         glomerulus = glomeruli[random.randrange(0, glomeruli_num)]
         
-        half_patch_size = patch_size / 2 + 50
+        half_patch_size = patch_size / 2
         center_x = random.randrange(
             int(glomerulus.centroid_x - half_patch_size), 
             int(glomerulus.centroid_x + half_patch_size)
@@ -192,6 +193,98 @@ def generate_glomerulus_patches(patch_size, num_patches, glomeruli, image):
             patch_size = patch_size,
             glomeruli = glomeruli,
             image = image
+        ))
+    return patches
+
+# Multi-image version of generate_glomerulus_patches
+def generate_glomerulus_patches_multi(patch_size, num_patches, glomeruli_list, image_list):
+    patches = []
+    for _ in tqdm(range(num_patches)):
+        image_idx = random.randrange(0, len(image_list))
+
+        glomeruli_num = len(glomeruli_list[image_idx])
+        glomerulus = glomeruli_list[image_idx][random.randrange(0, glomeruli_num)]
+        
+        half_patch_size = patch_size / 2 + 50
+        center_x = random.randrange(
+            int(glomerulus.centroid_x - half_patch_size), 
+            int(glomerulus.centroid_x + half_patch_size)
+        )
+        
+        center_y = random.randrange(
+            int(glomerulus.centroid_y - half_patch_size),
+            int(glomerulus.centroid_y + half_patch_size)
+        )
+        
+        theta = random.random()*360
+        
+        patches.append(Patch(
+            center_x = center_x,
+            center_y = center_y,
+            theta = theta,
+            patch_size = patch_size,
+            glomeruli = glomeruli_list[image_idx],
+            image = image_list[image_idx]
+        ))
+    return patches
+
+# Generates random patches from the image at random position and rotation
+def generate_random_patches(patch_size, num_patches, glomeruli, image):
+    patches = []
+    for _ in tqdm(range(num_patches)):
+        glomeruli_num = len(glomeruli)
+        glomerulus = glomeruli[random.randrange(0, glomeruli_num)]
+        
+        center_x = random.randrange(
+            patch_size // 2,
+            image.shape[2] - patch_size // 2
+        )
+        
+        center_y = random.randrange(
+            patch_size // 2,
+            image.shape[1] - patch_size // 2
+        )
+        
+        theta = random.random()*360
+        
+        patches.append(Patch(
+            center_x = center_x,
+            center_y = center_y,
+            theta = theta,
+            patch_size = patch_size,
+            glomeruli = glomeruli,
+            image = image
+        ))
+    return patches
+
+# Multi-image version of generate_random_patches
+def generate_random_patches_multi(patch_size, num_patches, glomeruli_list, image_list):
+    patches = []
+    for _ in tqdm(range(num_patches)):
+        image_idx = random.randrange(0, len(image_list))
+
+        glomeruli_num = len(glomeruli_list[image_idx])
+        glomerulus = glomeruli_list[image_idx][random.randrange(0, glomeruli_num)]
+        
+        center_x = random.randrange(
+            patch_size // 2,
+            image_list[image_idx].shape[2] - patch_size // 2
+        )
+        
+        center_y = random.randrange(
+            patch_size // 2,
+            image_list[image_idx].shape[1] - patch_size // 2
+        )
+        
+        theta = random.random()*360
+        
+        patches.append(Patch(
+            center_x = center_x,
+            center_y = center_y,
+            theta = theta,
+            patch_size = patch_size,
+            glomeruli = glomeruli_list[image_idx],
+            image = image_list[image_idx]
         ))
     return patches
 
