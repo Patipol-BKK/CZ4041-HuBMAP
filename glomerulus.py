@@ -9,6 +9,8 @@ import torch.nn as nn
 from torch.utils.data import Dataset
 import random
 
+from utils import read_tiff
+
 class Glomerulus():
     def __init__(self, coordinates):
         self.coordinates = np.array(coordinates)
@@ -169,7 +171,7 @@ class Patch():
 # Generates random patches centered around random glomerulus + random transformation (x, y, and rotation)
 def generate_glomerulus_patches(patch_size, num_patches, glomeruli, image):
     patches = []
-    for _ in tqdm(range(num_patches)):
+    for _ in range(num_patches):
         glomeruli_num = len(glomeruli)
         glomerulus = glomeruli[random.randrange(0, glomeruli_num)]
         
@@ -199,7 +201,7 @@ def generate_glomerulus_patches(patch_size, num_patches, glomeruli, image):
 # Multi-image version of generate_glomerulus_patches
 def generate_glomerulus_patches_multi(patch_size, num_patches, glomeruli_list, image_list):
     patches = []
-    for _ in tqdm(range(num_patches)):
+    for _ in range(num_patches):
         image_idx = random.randrange(0, len(image_list))
 
         glomeruli_num = len(glomeruli_list[image_idx])
@@ -231,7 +233,7 @@ def generate_glomerulus_patches_multi(patch_size, num_patches, glomeruli_list, i
 # Generates random patches from the image at random position and rotation
 def generate_random_patches(patch_size, num_patches, glomeruli, image):
     patches = []
-    for _ in tqdm(range(num_patches)):
+    for _ in range(num_patches):
         glomeruli_num = len(glomeruli)
         glomerulus = glomeruli[random.randrange(0, glomeruli_num)]
         
@@ -260,7 +262,7 @@ def generate_random_patches(patch_size, num_patches, glomeruli, image):
 # Multi-image version of generate_random_patches
 def generate_random_patches_multi(patch_size, num_patches, glomeruli_list, image_list):
     patches = []
-    for _ in tqdm(range(num_patches)):
+    for _ in range(num_patches):
         image_idx = random.randrange(0, len(image_list))
 
         glomeruli_num = len(glomeruli_list[image_idx])
@@ -288,17 +290,93 @@ def generate_random_patches_multi(patch_size, num_patches, glomeruli_list, image
         ))
     return patches
 
+# Dataset class for storing sample patches
 class KidneySampleDataset():
-    def __init__(self, patches):
-        self.patches = patches
-    def __getitem__(self, idx):
-        # Handle slicing, repeatedly call index version of the function
-        if isinstance(idx, slice):
-            return [self[ii] for ii in iter(range(*idx.indices(len(self))))]
+    def __init__(self, patches=None, pre_render=True):
+        self.image_array = None
+        self.pre_render = pre_render
 
-        # Handle index
-        elif isinstance(idx, int):
-            return self.patches[idx].render_image(), self.patches[idx].render_mask()
+        # Check if creating dataset from patch list
+        if not patches is None:
+            self.patches = patches
+            self.pre_render = pre_render
+
+            self.patch_size = patches[0].patch_size
+
+            # If pre_render is true, render images and save data in np array
+            if self.pre_render:
+                self.render_images()
+
+    # Render patch's transformation info into image data and store in np array
+    def render_images(self):
+        self.image_array = np.zeros((len(self.patches), self.patch_size, self.patch_size, 2))
+        for idx, patch in tqdm(enumerate(self.patches), desc='Rendering Patches', total=len(self.patches)):
+            image = np.array(patch.render_image())
+            mask = np.array(patch.render_mask())
+
+            self.image_array[idx, :, :, 0] = image[:, :]
+            self.image_array[idx, :, :, 1] = mask[:, :]
+        self.pre_render = True
+
+    # Load sample images and masks from .npy
+    def load(self, path):
+        self.image_array = np.load(path)
+        self.pre_render = True
+
+    # Save sample images and masks to .npy
+    def save(self, path):
+        if not self.pre_render:
+            print('Dataset not yet rendered, rendering images')
+            self.render_images()
+
+        np.save(path, self.image_array)
+
+    # Append sample images and masks from new dataset to self
+    def append_data(self, new_dataset):
+        if self.image_array is None:
+            self.image_array = new_dataset.image_array
+        elif new_dataset.image_array is None:
+            pass
+        else:
+            self.image_array = np.append(self.image_array, new_dataset.image_array, axis=0)
+
+    def __getitem__(self, idx):
+        if not self.pre_render:
+            # Handle slicing, repeatedly call index version of the function
+            if isinstance(idx, slice):
+                return [self[ii] for ii in iter(range(*idx.indices(len(self))))]
+            # Handle index
+            elif isinstance(idx, int):
+                return self.patches[idx].render_image(), self.patches[idx].render_mask()
+
+        # If prerender, let numpy handle indexing and slicing
+        else:
+            return self.image_array[idx, :, :, 0], self.image_array[idx, :, :, 1]
         
     def __len__(self):
-        return len(self.patches)
+        return len(self.image_array)
+
+# Read and sample patches from the image
+def generate_patches(patch_size, num_samples, image_path, label_path, glomerulus_patch_ratio=0.8, random_patch_ratio=0.2, empty_patch=0):
+    try:
+        # Read image and parse glomeruli geometries
+        image = read_tiff(image_path)
+        glomeruli = get_glomeruli(label_path,'glomerulus')
+        
+        # Take samples from the image
+        patches = generate_glomerulus_patches(
+            patch_size = patch_size,
+            num_patches = int(num_samples * glomerulus_patch_ratio),
+            glomeruli = glomeruli,
+            image = image
+        ) + generate_random_patches(
+            patch_size = patch_size,
+            num_patches = int(num_samples * random_patch_ratio),
+            glomeruli = glomeruli,
+            image = image
+        )
+        # + generate_empty_patches -> not implemented yet
+        
+        return patches
+    except:
+        print(f'Error reading {image_path}')
