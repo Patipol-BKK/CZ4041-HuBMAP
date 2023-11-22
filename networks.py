@@ -434,6 +434,142 @@ class UNet(nn.Module):
         out = self.generate(out_9)
         return self.transform_output(out)
 
+class UNet_Large(nn.Module):
+    def __init__(self, input_size=(128, 128), output_size=(128, 128)):
+        super().__init__()
+        
+        self.transform_input_1 = nn.AdaptiveAvgPool2d(input_size)
+        self.transform_output = nn.AdaptiveAvgPool2d(output_size)
+        
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.upscale = nn.Upsample(scale_factor=2, mode='bilinear')
+        
+        self.encode_1 = Block(
+            layer_type = 'Conv2d',
+            in_channels = 1, 
+            out_channels = 64,
+            hidden_channels = 64,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.encode_2 = Block(
+            layer_type = 'Conv2d',
+            in_channels = 64, 
+            out_channels = 128,
+            hidden_channels = 128,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.encode_3 = Block(
+            layer_type = 'Conv2d',
+            in_channels = 128, 
+            out_channels = 256, 
+            hidden_channels = 256,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.encode_4 = Block(
+            layer_type = 'Conv2d',
+            in_channels = 256, 
+            out_channels = 512, 
+            hidden_channels = 512,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.encode_5 = Block(
+            layer_type = 'Conv2d',
+            in_channels = 512, 
+            out_channels = 512, 
+            hidden_channels = 1024 ,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.decode_1 = Block(
+            layer_type = 'Conv2d',
+            in_channels = 1024, 
+            out_channels = 256, 
+            hidden_channels = 512,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.decode_2 = Block(
+            layer_type = 'Conv2d',
+            in_channels = 512, 
+            out_channels = 128, 
+            hidden_channels = 256,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.decode_3 = Block(
+            layer_type = 'Conv2d',
+            in_channels = 256, 
+            out_channels = 64, 
+            hidden_channels = 128,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.decode_4 = Block(
+            layer_type = 'Conv2d',
+            in_channels = 128, 
+            out_channels = 64, 
+            hidden_channels = 64,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.generate = Block(
+            layer_type = 'Conv2d',
+            in_channels = 64, 
+            out_channels = 1,
+            hidden_channels = 1,
+            num_layers = 1,
+            activation_type = 'Sigmoid',
+            kernel_size = 3
+        )
+    def forward(self, x):
+        
+        in_1 = self.transform_input_1(x)
+        out_1 = self.encode_1(in_1)
+        skip_1 = out_1.detach().clone()
+        out_1 = self.pool(out_1)
+        
+        out_2 = self.encode_2(out_1)
+        skip_2 = out_2.detach().clone()
+        out_2 = self.pool(out_2)
+        
+        out_3 = self.encode_3(out_2)
+        skip_3 = out_3.detach().clone()
+        out_3 = self.pool(out_3)
+        
+        out_4 = self.encode_4(out_3)
+        skip_4 = out_4.detach().clone()
+        out_4 = self.pool(out_4)
+        
+        out_5 = self.encode_5(out_4)
+        out_5 = self.upscale(out_5)
+        
+        out_6 = self.decode_1(torch.cat((skip_4, out_5), 1))
+        out_6 = self.upscale(out_6)
+        
+        out_7 = self.decode_2(torch.cat((skip_3, out_6), 1))
+        out_7 = self.upscale(out_7)
+        
+        out_8 = self.decode_3(torch.cat((skip_2, out_7), 1))
+        out_8 = self.upscale(out_8)
+        
+        out_9 = self.decode_4(torch.cat((skip_1, out_8), 1))
+        
+        out = self.generate(out_9)
+        return self.transform_output(out)
+
 class R2UNet(nn.Module):
     def __init__(self, input_size=(128, 128), output_size=(128, 128)):
         super().__init__()
@@ -528,6 +664,144 @@ class R2UNet(nn.Module):
         self.generate = Block(
             layer_type = 'Conv2d',
             in_channels = 16, 
+            out_channels = 1,
+            hidden_channels = 1,
+            num_layers = 1,
+            activation_type = 'Sigmoid',
+            kernel_size = 3
+        )
+
+    def forward(self, x):
+        
+        in_1 = self.transform_input(x)
+        out_1 = self.encode_1(in_1)
+        skip_1 = out_1.detach().clone()
+        out_1 = self.pool(out_1)
+        
+        out_2 = self.encode_2(out_1)
+        skip_2 = out_2.detach().clone()
+        out_2 = self.pool(out_2)
+        
+        out_3 = self.encode_3(out_2)
+        skip_3 = out_3.detach().clone()
+        out_3 = self.pool(out_3)
+        
+        out_4 = self.encode_4(out_3)
+        skip_4 = out_4.detach().clone()
+        out_4 = self.pool(out_4)
+        
+        out_5 = self.encode_5(out_4)
+        out_5 = self.upscale(out_5)
+        
+        out_6 = self.decode_1(torch.cat((skip_4, out_5), 1))
+        out_6 = self.upscale(out_6)
+        
+        out_7 = self.decode_2(torch.cat((skip_3, out_6), 1))
+        out_7 = self.upscale(out_7)
+        
+        out_8 = self.decode_3(torch.cat((skip_2, out_7), 1))
+        out_8 = self.upscale(out_8)
+        
+        out_9 = self.decode_4(torch.cat((skip_1, out_8), 1))
+        
+        out = self.generate(out_9)
+
+        return self.transform_output(out)
+
+class R2UNet_Large(nn.Module):
+    def __init__(self, input_size=(128, 128), output_size=(128, 128)):
+        super().__init__()
+        
+        self.transform_input = nn.AdaptiveAvgPool2d(input_size)
+        self.transform_output = nn.AdaptiveAvgPool2d(output_size)
+        
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.upscale = nn.Upsample(scale_factor=2, mode='bilinear')
+        
+        self.encode_1 = R2Block(
+            layer_type = 'Conv2d',
+            in_channels = 1, 
+            out_channels = 64,
+            hidden_channels = 64,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.encode_2 = R2Block(
+            layer_type = 'Conv2d',
+            in_channels = 64, 
+            out_channels = 128,
+            hidden_channels = 128,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.encode_3 = R2Block(
+            layer_type = 'Conv2d',
+            in_channels = 128, 
+            out_channels = 256, 
+            hidden_channels = 256,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.encode_4 = R2Block(
+            layer_type = 'Conv2d',
+            in_channels = 256, 
+            out_channels = 512, 
+            hidden_channels = 512,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.encode_5 = R2Block(
+            layer_type = 'Conv2d',
+            in_channels = 512, 
+            out_channels = 512, 
+            hidden_channels = 1024 ,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.decode_1 = R2Block(
+            layer_type = 'Conv2d',
+            in_channels = 1024, 
+            out_channels = 256, 
+            hidden_channels = 512,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.decode_2 = R2Block(
+            layer_type = 'Conv2d',
+            in_channels = 512, 
+            out_channels = 128, 
+            hidden_channels = 256,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.decode_3 = R2Block(
+            layer_type = 'Conv2d',
+            in_channels = 256, 
+            out_channels = 64, 
+            hidden_channels = 128,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.decode_4 = R2Block(
+            layer_type = 'Conv2d',
+            in_channels = 128, 
+            out_channels = 64, 
+            hidden_channels = 64,
+            num_layers = 2,
+            activation_type = 'ReLU'
+        )
+        
+        self.generate = Block(
+            layer_type = 'Conv2d',
+            in_channels = 64, 
             out_channels = 1,
             hidden_channels = 1,
             num_layers = 1,
