@@ -5,24 +5,26 @@ from tqdm.auto import tqdm
 import numpy as np
 import torch
 import torch.nn
+import sys
 
 from losses import bce_weighted_dice_loss
 
 dtype = torch.cuda.FloatTensor
 
-def train(model, train_dataloader, val_dataloader, label_mean, epochs=100):
+def train(model, model_name, save_dir, train_dataloader, val_dataloader, criterion, optimizer, epochs=100):
     gc.collect()
     torch.cuda.empty_cache()
-    
+
     best_weights = None
-    best_loss = 10000000
-    
+    best_loss = sys.maxsize
+
     train_loss = []
     val_loss = []
-    
 
-    criterion = bce_weighted_dice_loss
-    optimizer = optim.Adam(model.parameters(), lr=0.008, weight_decay=1e-6)
+    # Model name format:
+    # model_name, patch_size, dataset, lr, epoch
+    model_name = f'{model_name}_{str(epochs)}'
+
     pbar = tqdm(total=epochs, desc='Training')
     for epoch in range(epochs):
         # Train
@@ -33,13 +35,14 @@ def train(model, train_dataloader, val_dataloader, label_mean, epochs=100):
             gc.collect()
             torch.cuda.empty_cache()
             # Move data to GPU
-            inputs = inputs.type(dtype)
-            labels = labels.type(dtype)
+            inputs = torch.unsqueeze(torch.tensor(inputs.type(dtype)), axis=1)
+            labels = torch.unsqueeze(torch.tensor(labels.type(dtype)), axis=1)
+            optimizer.zero_grad()
             # Run model
             outputs = model.forward(inputs)
 
-            loss = criterion(outputs, labels, [1-label_mean, label_mean]).cuda()
-            optimizer.zero_grad()
+            loss = criterion(outputs, labels).cuda()
+            
             loss.backward()
 
             running_loss += loss.item()
@@ -56,26 +59,24 @@ def train(model, train_dataloader, val_dataloader, label_mean, epochs=100):
                 gc.collect()
                 torch.cuda.empty_cache()
                 # Move data to GPU
-                inputs = inputs.type(dtype)
-                labels = labels.type(dtype)
+                inputs = torch.unsqueeze(torch.tensor(inputs.type(dtype)), axis=1)
+                labels = torch.unsqueeze(torch.tensor(labels.type(dtype)), axis=1)
                 # Run model
                 outputs = model.forward(inputs)
 
-                loss = criterion(outputs, labels, [1-label_mean, label_mean]).cuda()
+                loss = criterion(outputs, labels).cuda()
                 running_loss += loss.item()
         val_epoch_loss = running_loss / len(val_dataloader)
         val_loss.append(val_epoch_loss)
         
-        # Save model every epochs
-        torch.save(model.state_dict(), f'./models/{model_name}_{loss_name}_t{str(num_train_samples)}_{str(epoch+1)}.npz')
-            
         # Keep track of best weights
         if val_epoch_loss < best_loss:
             best_loss = val_epoch_loss
             best_weights = model.state_dict()
             
-        pbar.set_postfix({'Train Loss': train_epoch_loss, 'Val Loss': val_epoch_loss, 'Best Val': best_loss})
+        pbar.set_postfix({'TL': train_epoch_loss, 'VL': val_epoch_loss, 'BV': best_loss})
         pbar.update(1)
-    # Save weights with best loss
-    torch.save(best_weights, f'./models/{model_name}_{loss_name}_t{str(num_train_samples)}_best_loss.npz')
+    # Save weights
+    torch.save(best_weights, os.path.join(save_dir, f'{model_name}_best_loss.npz'))
+    torch.save(model.state_dict(), os.path.join(save_dir, f'{model_name}_last_epoch.npz'))
     return model, train_loss, val_loss
