@@ -340,6 +340,35 @@ class KidneySampleDataset():
         else:
             self.image_array = np.append(self.image_array, new_dataset.image_array, axis=0)
 
+    def random_sample(self, num_samples):
+        rng = np.random.default_rng()
+        new_dataset = KidneySampleDataset(pre_render=True)
+        new_dataset.image_array = rng.choice(self.image_array, num_samples, replace=False)
+
+        return new_dataset
+
+    def shuffle(self):
+        np.random.shuffle(self.image_array)
+
+    def split(self, ratios):
+        dataset_len = len(self.image_array)
+        splits = []
+        prev_split = 0
+        for idx, ratio in enumerate(ratios):
+            split_size = int(ratio * dataset_len)
+
+            new_dataset = KidneySampleDataset(pre_render=True)
+
+            # Check if last split
+            if idx == len(ratios) - 1:
+                new_dataset.image_array = self.image_array[prev_split:]
+            else:
+                new_dataset.image_array = self.image_array[prev_split:prev_split + split_size]
+
+            splits.append(new_dataset)
+            prev_split += split_size
+        return splits
+
     def __getitem__(self, idx):
         if not self.pre_render:
             # Handle slicing, repeatedly call index version of the function
