@@ -65,6 +65,8 @@ class Patch():
     # TODO: Optimize by only rendering glomeruli appeared in the mask
     # Renders image binary mask using given image array and patch's coordinate and rotation
     def render_mask(self):
+        if self.glomeruli is None:
+            return np.zeros((self.patch_size, self.patch_size))
         cell_center_x = int(round(self.center_x))
         cell_center_y = int(round(self.center_y))
         

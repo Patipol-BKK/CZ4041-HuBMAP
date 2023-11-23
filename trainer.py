@@ -12,7 +12,7 @@ from losses import bce_weighted_dice_loss
 
 dtype = torch.cuda.FloatTensor
 
-def train(model, model_name, save_dir, train_dataloader, val_dataloader, criterion, optimizer, epochs=100):
+def train(model, model_name, save_dir, train_dataloader, val_dataloader, criterion, optimizer, epochs=100, gpu_id=0):
     gc.collect()
     torch.cuda.empty_cache()
 
@@ -36,13 +36,13 @@ def train(model, model_name, save_dir, train_dataloader, val_dataloader, criteri
             gc.collect()
             torch.cuda.empty_cache()
             # Move data to GPU
-            inputs = torch.unsqueeze(torch.tensor(inputs.type(dtype)), axis=1)
-            labels = torch.unsqueeze(torch.tensor(labels.type(dtype)), axis=1)
+            inputs = torch.unsqueeze(torch.tensor(inputs.type(dtype).cuda(device=gpu_id)), axis=1)
+            labels = torch.unsqueeze(torch.tensor(labels.type(dtype).cuda(device=gpu_id)), axis=1)
             optimizer.zero_grad()
             # Run model
             outputs = model.forward(inputs)
 
-            loss = criterion(outputs, labels).cuda()
+            loss = criterion(outputs, labels).cuda(device=gpu_id)
             
             loss.backward()
 
@@ -60,12 +60,12 @@ def train(model, model_name, save_dir, train_dataloader, val_dataloader, criteri
                 gc.collect()
                 torch.cuda.empty_cache()
                 # Move data to GPU
-                inputs = torch.unsqueeze(torch.tensor(inputs.type(dtype)), axis=1)
-                labels = torch.unsqueeze(torch.tensor(labels.type(dtype)), axis=1)
+                inputs = torch.unsqueeze(torch.tensor(inputs.type(dtype).cuda(device=gpu_id)), axis=1)
+                labels = torch.unsqueeze(torch.tensor(labels.type(dtype).cuda(device=gpu_id)), axis=1)
                 # Run model
                 outputs = model.forward(inputs)
 
-                loss = criterion(outputs, labels).cuda()
+                loss = criterion(outputs, labels).cuda(device=gpu_id)
                 running_loss += loss.item()
         val_epoch_loss = running_loss / len(val_dataloader)
         val_loss.append(val_epoch_loss)
